@@ -65,8 +65,11 @@ def build_ui():
         relevant_chunks = retrieve_chunks(query, index, embeddings, financial_data)
 
         # Generate answer using a small language model
-        answer = generate_answer(query, relevant_chunks)
-        st.write(f"**Answer:** {answer}")
+        try:
+            answer = generate_answer(query, relevant_chunks)
+            st.write(f"**Answer:** {answer}")
+        except Exception as e:
+            st.error(f"An error occurred while generating the answer: {e}")
 
         # Display retrieved chunks
         st.write("**Relevant Financial Data:**")
@@ -79,7 +82,7 @@ def generate_answer(query, relevant_chunks):
     generator = pipeline("text-generation", model="EleutherAI/gpt-neo-125M")
     context = " ".join(relevant_chunks)
     prompt = f"Question: {query}\nContext: {context}\nAnswer:"
-    answer = generator(prompt, max_length=100, num_return_sequences=1)[0]["generated_text"]
+    answer = generator(prompt, max_length=200, num_return_sequences=1)[0]["generated_text"]
     return answer.split("Answer:")[-1].strip()
 
 # Main Execution
