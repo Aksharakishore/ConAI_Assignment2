@@ -8,7 +8,13 @@ import torch
 from sentence_transformers import SentenceTransformer
 from langchain.memory import ConversationBufferMemory
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+import asyncio
 
+# Fix asyncio event loop issue
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 # Load embedding model
 try:
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -46,7 +52,8 @@ else:
         pickle.dump(financial_data, f)
 
 # Initialize memory for context-aware retrieval
-memory = ConversationBufferMemory(memory_key="chat_history")
+#memory = ConversationBufferMemory(memory_key="chat_history")
+memory = ConversationBufferMemory(return_messages=True)
 
 # Load small open-source language model (SLM)
 MODEL_NAME = "t5-small"
