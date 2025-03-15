@@ -1,9 +1,9 @@
 streamlit
 faiss-cpu
-sentence-transformers
-langchain
+pickle-mixin
+yfinance
+pandas
 torch
 transformers
-pandas
-requests
-yfinance
+sentence-transformers
+langchain
