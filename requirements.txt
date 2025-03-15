@@ -4,3 +4,4 @@ faiss-cpu
 rank_bm25
 streamlit
 transformers
+yfinance
