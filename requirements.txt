@@ -8,3 +8,4 @@ transformers
 sentence-transformers
 langchain
 accelerate
+nest_asyncio
