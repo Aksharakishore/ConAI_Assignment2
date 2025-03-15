@@ -10,13 +10,16 @@ from transformers import pipeline
 # Constants
 INDEX_FILE = "financial_index.faiss"
 DATA_FILE = "financial_data.pkl"
+EMBEDDINGS_FILE = "financial_embeddings.pkl"
 
-# Load or create FAISS index and financial data
-if os.path.exists(INDEX_FILE) and os.path.exists(DATA_FILE):
-    # Load existing index and data
+# Load or create FAISS index, financial data, and embeddings
+if os.path.exists(INDEX_FILE) and os.path.exists(DATA_FILE) and os.path.exists(EMBEDDINGS_FILE):
+    # Load existing index, data, and embeddings
     index = faiss.read_index(INDEX_FILE)
     with open(DATA_FILE, "rb") as f:
         financial_data = pickle.load(f)
+    with open(EMBEDDINGS_FILE, "rb") as f:
+        embeddings = pickle.load(f)
 else:
     # Fetch financial data using yfinance
     st.write("📥 Downloading financial data...")
@@ -37,9 +40,11 @@ else:
     index.add(embeddings)
     faiss.write_index(index, INDEX_FILE)
 
-    # Save financial data
+    # Save financial data and embeddings
     with open(DATA_FILE, "wb") as f:
         pickle.dump(financial_data, f)
+    with open(EMBEDDINGS_FILE, "wb") as f:
+        pickle.dump(embeddings, f)
 
 # Step 2: Basic RAG Implementation
 def retrieve_chunks(query, index, embeddings, financial_data, top_k=3):
