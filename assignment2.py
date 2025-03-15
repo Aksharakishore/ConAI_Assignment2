@@ -8,21 +8,12 @@ import torch
 from sentence_transformers import SentenceTransformer
 from langchain.memory import ConversationBufferMemory
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import asyncio
+import nest_asyncio
 import os
 
-# Uninstall existing Torch
-os.system("pip uninstall torch torchvision torchaudio -y")
-os.system("pip cache purge")
-
-# Install a fresh version of Torch
-os.system("pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu")
-
 # Fix asyncio event loop issue
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
+nest_asyncio.apply()
+
 # Load embedding model
 try:
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
