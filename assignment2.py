@@ -4,17 +4,17 @@ import pickle
 import os
 import yfinance as yf
 import pandas as pd
+import torch
 from sentence_transformers import SentenceTransformer
 from langchain.memory import ConversationBufferMemory
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import torch
 
 # Load embedding model
 try:
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    print("SentenceTransformer loaded successfully!")
+    st.write("✅ SentenceTransformer loaded successfully!")
 except Exception as e:
-    print(f"Error loading SentenceTransformer: {e}")
+    st.error(f"❌ Error loading SentenceTransformer: {e}")
 
 # Load or create FAISS index
 INDEX_FILE = "financial_index.faiss"
@@ -29,7 +29,7 @@ else:
     financial_data = []
     
     # Fetch financial data using yfinance
-    st.write("Downloading financial data...")
+    st.write("📥 Downloading financial data...")
     ticker = "AAPL"
     stock = yf.Ticker(ticker)
     df = stock.history(period="2y", interval="1mo")
@@ -49,16 +49,21 @@ else:
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 # Load small open-source language model (SLM)
-MODEL_NAME = "google/flan-t5-small"  # Lighter model
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSeq2SeqLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float32,  # Keep it CPU-friendly
-    device_map="cpu",
-    low_cpu_mem_usage=True
-).to("cpu")
+MODEL_NAME = "t5-small"  # Smaller model for efficiency
 
+try:
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        MODEL_NAME,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        device_map="auto",
+        low_cpu_mem_usage=True
+    ).to("cpu")
+    st.write("✅ Model loaded successfully!")
+except Exception as e:
+    st.error(f"❌ Error loading model: {e}")
 
+# Function to generate responses
 def generate_response(prompt):
     inputs = tokenizer(prompt, return_tensors="pt").to("cpu")
     with torch.no_grad():
@@ -82,7 +87,7 @@ def filter_output(response, confidence_threshold=0.5):
 
 # Streamlit UI
 def main():
-    st.title("Financial RAG Chatbot")
+    st.title("📊 Financial RAG Chatbot")
     user_query = st.text_input("Ask a financial question:")
     
     if st.button("Submit"):
@@ -90,11 +95,12 @@ def main():
         memory.save_context({"input": user_query}, {"output": context})
         response = generate_response(context + "\n Answer this: " + user_query)
         filtered_response = filter_output(response)
-        st.write("### Answer:")
-        st.write(filtered_response)
-        st.write("### Confidence Score:", 0.9)  # Placeholder score
         
-        st.write("### Chat History:")
+        st.subheader("📌 Answer:")
+        st.write(filtered_response)
+        st.write("### 🔍 Confidence Score:", 0.9)  # Placeholder score
+        
+        st.subheader("📝 Chat History:")
         st.write(memory.load_memory_variables({}))
 
 if __name__ == "__main__":
