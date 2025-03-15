@@ -9,6 +9,14 @@ from sentence_transformers import SentenceTransformer
 from langchain.memory import ConversationBufferMemory
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import asyncio
+import os
+
+# Uninstall existing Torch
+os.system("pip uninstall torch torchvision torchaudio -y")
+os.system("pip cache purge")
+
+# Install a fresh version of Torch
+os.system("pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu")
 
 # Fix asyncio event loop issue
 try:
