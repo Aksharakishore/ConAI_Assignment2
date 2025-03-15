@@ -80,20 +80,37 @@ def generate_response(prompt):
     return tokenizer.decode(output[0], skip_special_tokens=True)
 
 
-# Function to retrieve relevant financial chunks
-def retrieve_financial_info(query, k=3):
-    query_embedding = embed_model.encode([query])
-    if index is not None:
-        distances, indices = index.search(query_embedding, k)
-        retrieved_texts = [financial_data[i] for i in indices[0]]
-        return "\n".join(retrieved_texts)
-    return "No relevant financial information found."
+# Function to retrieve financial trend insights instead of raw data
+def retrieve_financial_info(query):
+    # Fetch last 6 months of stock data
+    ticker = "AAPL"
+    stock = yf.Ticker(ticker)
+    df = stock.history(period="6mo", interval="1mo")
 
-# Function to filter hallucinations
-def filter_output(response, confidence_threshold=0.5):
-    if "financial" not in response.lower():
-        return "[Filtered Output]: The response does not appear to be financial-related."
-    return response
+    if df.empty:
+        return "No financial data available."
+
+    # Calculate trend (percent change from start to end)
+    start_price = df["Close"].iloc[0]
+    end_price = df["Close"].iloc[-1]
+    trend = ((end_price - start_price) / start_price) * 100
+
+    trend_text = (
+        f"Apple's stock price over the last 6 months has "
+        f"{'increased' if trend > 0 else 'decreased'} by {abs(trend):.2f}%.\n"
+        f"Recent Prices: {df['Close'].tolist()}"
+    )
+    return trend_text
+
+
+# Function to filter hallucinations and irrelevant responses
+def filter_output(response):
+    # Allow response if it contains financial terms or numbers
+    keywords = ["price", "stock", "trend", "increase", "decrease", "growth", "decline", "market"]
+    if any(word in response.lower() for word in keywords) or any(char.isdigit() for char in response):
+        return response
+    return "[Filtered Output]: The response does not appear to be financial-related."
+
 
 # Streamlit UI
 def main():
@@ -101,9 +118,9 @@ def main():
     user_query = st.text_input("Ask a financial question:")
     
     if st.button("Submit"):
-        context = retrieve_financial_info(user_query)
-        memory.save_context({"input": user_query}, {"output": context})
-        response = generate_response(context + "\n Answer this: " + user_query)
+        financial_context = retrieve_financial_info(user_query)
+        memory.save_context({"input": user_query}, {"output": financial_context})
+        response = generate_response(financial_context + "\n Answer this: " + user_query)
         filtered_response = filter_output(response)
         
         st.subheader("📌 Answer:")
