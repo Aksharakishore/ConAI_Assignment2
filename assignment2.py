@@ -121,10 +121,10 @@ def main():
         financial_context = retrieve_financial_info(user_query)
         memory.save_context({"input": user_query}, {"output": financial_context})
         response = generate_response(financial_context + "\n Answer this: " + user_query)
-        filtered_response = filter_output(response)
+        #filtered_response = filter_output(response)
         
         st.subheader("📌 Answer:")
-        st.write(filtered_response)
+        st.write(response)
         st.write("### 🔍 Confidence Score:", 0.9)  # Placeholder score
         
         st.subheader("📝 Chat History:")
