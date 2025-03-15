@@ -49,26 +49,36 @@ else:
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 # Load small open-source language model (SLM)
-MODEL_NAME = "t5-small"  # Smaller model for efficiency
+MODEL_NAME = "t5-small"
 
 try:
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForSeq2SeqLM.from_pretrained(
         MODEL_NAME,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        device_map="auto",
+        torch_dtype=torch.float32,  # Use float32 to avoid precision issues
+        device_map="cpu",  # Ensure it runs on CPU
         low_cpu_mem_usage=True
     ).to("cpu")
+
     st.write("✅ Model loaded successfully!")
+
 except Exception as e:
-    st.error(f"❌ Error loading model: {e}")
+    st.error(f"❌ Model loading failed: {e}")
+    model = None  # Prevents crashes in generate_response()
+
 
 # Function to generate responses
 def generate_response(prompt):
+    if model is None:
+        return "⚠️ Error: Model not loaded. Please check logs."
+    
     inputs = tokenizer(prompt, return_tensors="pt").to("cpu")
+    
     with torch.no_grad():
-        output = model.generate(**inputs, max_length=100)  # Reduced max length
+        output = model.generate(**inputs, max_length=100)
+    
     return tokenizer.decode(output[0], skip_special_tokens=True)
+
 
 # Function to retrieve relevant financial chunks
 def retrieve_financial_info(query, k=3):
