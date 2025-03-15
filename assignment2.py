@@ -1,127 +1,116 @@
-import streamlit as st
-import faiss
-import pickle
 import os
-import yfinance as yf
-import pandas as pd
+import PyPDF2
+import numpy as np
+import faiss
 from sentence_transformers import SentenceTransformer
-from langchain.memory import ConversationBufferMemory
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import nest_asyncio
+from rank_bm25 import BM25Okapi
+import streamlit as st
+from transformers import pipeline
 
-# Fix asyncio event loop issue
-nest_asyncio.apply()
+# Step 1: Data Preprocessing
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file."""
+    with open(pdf_path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+    return text
 
-# Load embedding model (without requiring torch)
-try:
-    embed_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")  # No PyTorch needed
-    st.write("✅ SentenceTransformer loaded successfully!")
-except Exception as e:
-    st.error(f"❌ Error loading SentenceTransformer: {e}")
+def preprocess_text(text, chunk_size=256):
+    """Split text into smaller chunks."""
+    words = text.split()
+    chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    return chunks
 
-# Load or create FAISS index
-INDEX_FILE = "financial_index.faiss"
-DATA_FILE = "financial_data.pkl"
+# Step 2: Basic RAG Implementation
+def embed_chunks(chunks, model_name="all-MiniLM-L6-v2"):
+    """Embed text chunks using a pre-trained model."""
+    model = SentenceTransformer(model_name)
+    embeddings = model.encode(chunks)
+    return embeddings
 
-if os.path.exists(INDEX_FILE) and os.path.exists(DATA_FILE):
-    index = faiss.read_index(INDEX_FILE)
-    with open(DATA_FILE, "rb") as f:
-        financial_data = pickle.load(f)
-else:
-    index = None
-    financial_data = []
-    
-    # Fetch financial data using yfinance
-    st.write("📥 Downloading financial data...")
-    ticker = "AAPL"
-    stock = yf.Ticker(ticker)
-    df = stock.history(period="2y", interval="1mo")
-    df.to_csv("financial_data.csv")
-    
-    financial_data = df.to_string().split("\n")
-    embeddings = embed_model.encode(financial_data)
-    
-    index = faiss.IndexFlatL2(embeddings.shape[1])
+def create_faiss_index(embeddings):
+    """Create a FAISS index for vector storage and retrieval."""
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
     index.add(embeddings)
-    faiss.write_index(index, INDEX_FILE)
-    
-    with open(DATA_FILE, "wb") as f:
-        pickle.dump(financial_data, f)
+    return index
 
-# Initialize memory for context-aware retrieval
-memory = ConversationBufferMemory(return_messages=True)
+def retrieve_chunks(query, index, embeddings, chunks, top_k=3):
+    """Retrieve top-k relevant chunks using FAISS."""
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    query_embedding = model.encode([query])
+    distances, indices = index.search(query_embedding, top_k)
+    return [chunks[i] for i in indices[0]]
 
-# Load small open-source language model (SLM) (No torch required)
-MODEL_NAME = "t5-small"
+# Step 3: Advanced RAG Implementation (Hybrid Search: BM25 + Dense Retrieval)
+def hybrid_search(query, chunks, bm25, index, embeddings, top_k=3):
+    """Combine BM25 and dense retrieval for hybrid search."""
+    # BM25 retrieval
+    bm25_scores = bm25.get_scores(query.split())
+    bm25_indices = np.argsort(bm25_scores)[-top_k:][::-1]
 
-try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, low_cpu_mem_usage=True)  # No torch required
+    # Dense retrieval
+    dense_results = retrieve_chunks(query, index, embeddings, chunks, top_k)
 
-    st.write("✅ Model loaded successfully!")
+    # Combine results
+    combined_results = list(set(bm25_indices.tolist() + [chunks.index(chunk) for chunk in dense_results]))
+    return [chunks[i] for i in combined_results]
 
-except Exception as e:
-    st.error(f"❌ Model loading failed: {e}")
-    model = None  # Prevents crashes in generate_response()
+# Step 4: Streamlit UI
+def build_ui():
+    """Build a Streamlit UI for the RAG system."""
+    st.title("Financial Question Answering System")
+    query = st.text_input("Enter your financial question:")
 
+    if query:
+        # Input-side guardrail
+        if not is_financial_query(query):
+            st.write("Please ask a financial-related question.")
+            return
 
-# Function to generate responses
-def generate_response(prompt):
-    if model is None:
-        return "⚠️ Error: Model not loaded. Please check logs."
-    
-    inputs = tokenizer(prompt, return_tensors="np")  # Change to numpy tensors
-    
-    output = model.generate(**inputs, max_length=100)  # No need for torch.no_grad()
-    
-    return tokenizer.decode(output[0], skip_special_tokens=True)
+        # Retrieve relevant chunks
+        relevant_chunks = hybrid_search(query, chunks, bm25, index, embeddings)
 
+        # Generate answer using a small language model
+        answer = generate_answer(query, relevant_chunks)
+        st.write(f"**Answer:** {answer}")
 
-# Function to retrieve financial trend insights instead of raw data
-def retrieve_financial_info(query):
-    ticker = "AAPL"
-    stock = yf.Ticker(ticker)
-    df = stock.history(period="6mo", interval="1mo")
+        # Display retrieved chunks
+        st.write("**Relevant Chunks:**")
+        for i, chunk in enumerate(relevant_chunks):
+            st.write(f"{i + 1}. {chunk}")
 
-    if df.empty:
-        return "No financial data available."
+# Step 5: Guardrail Implementation (Input-Side)
+def is_financial_query(query):
+    """Validate if the query is financial-related."""
+    financial_keywords = ["revenue", "profit", "loss", "income", "cash flow", "balance sheet", "financial", "earnings"]
+    return any(keyword in query.lower() for keyword in financial_keywords)
 
-    start_price = df["Close"].iloc[0]
-    end_price = df["Close"].iloc[-1]
-    trend = ((end_price - start_price) / start_price) * 100
+# Step 6: Response Generation
+def generate_answer(query, relevant_chunks):
+    """Generate an answer using a small language model."""
+    generator = pipeline("text-generation", model="EleutherAI/gpt-neo-125M")
+    context = " ".join(relevant_chunks)
+    prompt = f"Question: {query}\nContext: {context}\nAnswer:"
+    answer = generator(prompt, max_length=100, num_return_sequences=1)[0]["generated_text"]
+    return answer.split("Answer:")[-1].strip()
 
-    trend_text = (
-        f"Apple's stock price over the last 6 months has "
-        f"{'increased' if trend > 0 else 'decreased'} by {abs(trend):.2f}%.\n"
-        f"Recent Prices: {df['Close'].tolist()}"
-    )
-    return trend_text
-
-
-# Function to filter hallucinations and irrelevant responses
-def filter_output(response):
-    keywords = ["price", "stock", "trend", "increase", "decrease", "growth", "decline", "market"]
-    if any(word in response.lower() for word in keywords) or any(char.isdigit() for char in response):
-        return response
-    return "[Filtered Output]: The response does not appear to be financial-related."
-
-
-# Streamlit UI
-def main():
-    st.title("📊 Financial RAG Chatbot")
-    user_query = st.text_input("Ask a financial question:")
-    
-    if st.button("Submit"):
-        financial_context = retrieve_financial_info(user_query)
-        memory.save_context({"input": user_query}, {"output": financial_context})
-        response = generate_response(financial_context + "\n Answer this: " + user_query)
-        
-        st.subheader("📌 Answer:")
-        st.write(response)
-        st.write("### 🔍 Confidence Score:", 0.9)  # Placeholder score
-        
-        st.subheader("📝 Chat History:")
-        st.write(memory.load_memory_variables({}))
-
+# Main Execution
 if __name__ == "__main__":
-    main()
+    # Load and preprocess financial data
+    pdf_path = "financial_statement.pdf"  # Replace with your PDF file path
+    text = extract_text_from_pdf(pdf_path)
+    chunks = preprocess_text(text)
+
+    # Embed chunks and create FAISS index
+    embeddings = embed_chunks(chunks)
+    index = create_faiss_index(embeddings)
+
+    # Create BM25 index
+    tokenized_chunks = [chunk.split() for chunk in chunks]
+    bm25 = BM25Okapi(tokenized_chunks)
+
+    # Build and run the Streamlit UI
+    build_ui()
