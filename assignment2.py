@@ -9,14 +9,12 @@ from langchain.memory import ConversationBufferMemory
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
-# Load embedding model only once
-def load_embed_model():
-    global embed_model
-    if "embed_model" not in globals():
-        embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-        print("SentenceTransformer loaded successfully!")
-
-load_embed_model()  # Ensure model is loaded only once
+# Load embedding model
+try:
+    embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+    print("SentenceTransformer loaded successfully!")
+except Exception as e:
+    print(f"Error loading SentenceTransformer: {e}")
 
 # Load or create FAISS index
 INDEX_FILE = "financial_index.faiss"
@@ -51,14 +49,14 @@ else:
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 # Load small open-source language model (SLM)
-MODEL_NAME = "EleutherAI/gpt-neo-125M"  # Lighter model for efficiency
+MODEL_NAME = "google/flan-t5-small"  # Lighter model
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
-    torch_dtype=torch.float32,  # Avoids float16 memory issues
-    device_map="cpu",           # Ensures CPU-only execution
+    torch_dtype=torch.float32,  # Keeps it simple for CPU usage
+    device_map="cpu",           # Ensures it runs on CPU
     low_cpu_mem_usage=True      # Helps reduce memory footprint
-).to("cpu")
+).to("cpu")  
 
 
 def generate_response(prompt):
@@ -100,5 +98,4 @@ def main():
         st.write(memory.load_memory_variables({}))
 
 if __name__ == "__main__":
-    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"  # Fix macOS multiprocessing issue
     main()
