@@ -6,5 +6,4 @@ torch
 transformers
 pandas
 requests
-pickle5
 yfinance
