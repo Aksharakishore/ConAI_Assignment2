@@ -1,11 +1,6 @@
-streamlit
-faiss-cpu
-pickle-mixin
-yfinance
-pandas
-torch
-transformers
+PyPDF2
 sentence-transformers
-langchain
-accelerate
-nest_asyncio
+faiss-cpu
+rank_bm25
+streamlit
+transformers
