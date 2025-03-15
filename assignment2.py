@@ -49,14 +49,14 @@ else:
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 # Load small open-source language model (SLM)
-MODEL_NAME = "HuggingFaceH4/zephyr-7b-beta"  # Using a lighter model
+MODEL_NAME = "google/flan-t5-small"  # Lighter model
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME, 
-    torch_dtype=torch.float16,  # Reduce precision to save memory
-    device_map="auto",          # Auto-selects best device
-    low_cpu_mem_usage=True      # Avoids memory overload
-).to("cpu")  # Ensure it's on CPU
+    MODEL_NAME,
+    torch_dtype=torch.float32,  # Keeps it simple for CPU usage
+    device_map="cpu",           # Ensures it runs on CPU
+    low_cpu_mem_usage=True      # Helps reduce memory footprint
+).to("cpu")  
 
 
 def generate_response(prompt):
