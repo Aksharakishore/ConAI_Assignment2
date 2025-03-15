@@ -6,7 +6,7 @@ import yfinance as yf
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from langchain.memory import ConversationBufferMemory
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import torch
 
 # Load embedding model
@@ -51,12 +51,12 @@ memory = ConversationBufferMemory(memory_key="chat_history")
 # Load small open-source language model (SLM)
 MODEL_NAME = "google/flan-t5-small"  # Lighter model
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(
+model = AutoModelForSeq2SeqLM.from_pretrained(
     MODEL_NAME,
-    torch_dtype=torch.float32,  # Keeps it simple for CPU usage
-    device_map="cpu",           # Ensures it runs on CPU
-    low_cpu_mem_usage=True      # Helps reduce memory footprint
-).to("cpu")  
+    torch_dtype=torch.float32,  # Keep it CPU-friendly
+    device_map="cpu",
+    low_cpu_mem_usage=True
+).to("cpu")
 
 
 def generate_response(prompt):
